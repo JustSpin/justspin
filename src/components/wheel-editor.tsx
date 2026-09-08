@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Plus, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronUp, Plus, Search, X } from "lucide-react";
 import {
   ALL_CUISINES,
+  FEATURED_EXTRA_IDS,
   MAX_SLICES,
   MIN_SLICES,
   PRESETS,
@@ -13,6 +14,12 @@ import { useT } from "@/lib/use-t";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+
+const FEATURED_ORDER = [...FEATURED_EXTRA_IDS];
+const FEATURED = new Set<string>(FEATURED_EXTRA_IDS);
+
+type MenuItem = { id: string; label: string; hint?: string };
+type MenuGroup = { id: string; label: string; items: MenuItem[] };
 
 export function WheelEditor() {
   const wheel = useBite((s) => s.wheel);
@@ -33,6 +40,33 @@ export function WheelEditor() {
   const available = ALL_CUISINES.filter((c) => !onWheel.has(c.id));
   const full = wheel.length >= MAX_SLICES;
 
+  const groups = useMemo<MenuGroup[]>(() => {
+    const featured: MenuItem[] = [];
+    const world: MenuItem[] = [];
+    for (const c of available) {
+      const item = {
+        id: c.id,
+        label: cuisineName(locale, c.id, c.label),
+        hint: cuisineKicker(locale, c.id, c.kicker),
+      };
+      if (FEATURED.has(c.id) || CUISINES_HOUSE.has(c.id)) featured.push(item);
+      else world.push(item);
+    }
+    featured.sort((a, b) => {
+      const ai = FEATURED_ORDER.indexOf(a.id);
+      const bi = FEATURED_ORDER.indexOf(b.id);
+      if (ai === -1 && bi === -1) return a.label.localeCompare(b.label);
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+    world.sort((a, b) => a.label.localeCompare(b.label));
+    return [
+      { id: "featured", label: t("groupFeatured"), items: featured },
+      { id: "world", label: t("groupWorld"), items: world },
+    ].filter((g) => g.items.length > 0);
+  }, [available, locale, t]);
+
   const submitCustom = () => {
     const ok = addCustom(draft);
     if (!ok) {
@@ -40,6 +74,11 @@ export function WheelEditor() {
       return;
     }
     setDraft("");
+    setNote(null);
+  };
+
+  const pick = (id: string) => {
+    addSlice(id);
     setNote(null);
   };
 
@@ -97,23 +136,17 @@ export function WheelEditor() {
       <p className="mt-5 text-[11px] font-medium uppercase tracking-[0.16em] text-subtle">
         {t("addSlice")}
       </p>
-      {available.length > 0 ? (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {available.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              disabled={full}
-              onClick={() => addSlice(c.id)}
-              className="h-10 rounded-full border border-border px-3.5 text-sm text-muted transition-colors duration-150 hover:border-fg/30 hover:text-fg disabled:opacity-40"
-            >
-              {cuisineName(locale, c.id, c.label)}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <p className="mt-2 text-sm text-muted">{t("everyCuisine")}</p>
-      )}
+      <div className="mt-2">
+        <AddSliceMenu
+          triggerLabel={t("otherCuisines")}
+          searchLabel={t("searchCuisines")}
+          emptyLabel={t("everyCuisine")}
+          nothingLabel={t("nothingMatches")}
+          groups={groups}
+          disabled={full}
+          onPick={pick}
+        />
+      </div>
 
       <div className="mt-3 flex gap-2">
         <Input
@@ -137,6 +170,148 @@ export function WheelEditor() {
       {note ? <p className="mt-2 text-sm text-accent">{note}</p> : null}
       {full ? (
         <p className="mt-2 text-sm text-muted">{t("twelveCeiling")}</p>
+      ) : null}
+    </div>
+  );
+}
+
+const CUISINES_HOUSE = new Set([
+  "mexican",
+  "pizza",
+  "burger",
+  "sushi",
+  "thai",
+  "indian",
+  "chinese",
+  "bbq",
+  "italian",
+  "korean",
+  "med",
+  "comfort",
+]);
+
+function AddSliceMenu({
+  triggerLabel,
+  searchLabel,
+  emptyLabel,
+  nothingLabel,
+  groups,
+  disabled,
+  onPick,
+}: {
+  triggerLabel: string;
+  searchLabel: string;
+  emptyLabel: string;
+  nothingLabel: string;
+  groups: MenuGroup[];
+  disabled?: boolean;
+  onPick: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const total = groups.reduce((n, g) => n + g.items.length, 0);
+  const q = query.trim().toLowerCase();
+  const filtered = groups
+    .map((g) => ({
+      ...g,
+      items: q
+        ? g.items.filter(
+            (item) =>
+              item.label.toLowerCase().includes(q) ||
+              item.id.toLowerCase().includes(q) ||
+              (item.hint ?? "").toLowerCase().includes(q),
+          )
+        : g.items,
+    }))
+    .filter((g) => g.items.length > 0);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: PointerEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey, true);
+    searchRef.current?.focus();
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey, true);
+    };
+  }, [open]);
+
+  if (total === 0) {
+    return <p className="text-sm text-muted">{emptyLabel}</p>;
+  }
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={triggerLabel}
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-11 w-full items-center justify-between gap-3 rounded-md border border-border bg-well px-3.5 text-left text-sm text-fg outline-none transition-colors duration-150 hover:border-fg/30 focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-40"
+      >
+        <span className="min-w-0 truncate">
+          {triggerLabel}
+          <span className="text-subtle"> · {total}</span>
+        </span>
+        <ChevronDown className={cn("size-4 shrink-0 text-subtle transition-transform duration-150", open && "rotate-180")} />
+      </button>
+      {open ? (
+        <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-md border border-border bg-fg text-bg shadow-lg">
+          <div className="relative border-b border-bg/15 p-2">
+            <Search className="pointer-events-none absolute left-5 top-1/2 size-4 -translate-y-1/2 text-bg/50" />
+            <Input
+              ref={searchRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={searchLabel}
+              aria-label={searchLabel}
+              className="h-10 border-0 bg-bg/10 pl-10 text-bg placeholder:text-bg/50"
+            />
+          </div>
+          <div role="listbox" aria-label={triggerLabel} className="max-h-64 overflow-y-auto overscroll-contain py-1">
+            {filtered.length === 0 ? (
+              <p className="px-3.5 py-3 text-sm text-bg/70">{nothingLabel}</p>
+            ) : (
+              filtered.map((group) => (
+                <div key={group.id} className="py-1">
+                  <p className="px-3.5 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-bg/50">
+                    {group.label}
+                  </p>
+                  {group.items.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="option"
+                      onClick={() => {
+                        onPick(item.id);
+                        setQuery("");
+                        setOpen(false);
+                      }}
+                      className="flex h-11 w-full items-center justify-between gap-3 px-3.5 text-left text-sm text-bg hover:bg-bg/10"
+                    >
+                      <span className="min-w-0 truncate font-medium">{item.label}</span>
+                      {item.hint ? (
+                        <span className="shrink-0 text-[11px] uppercase tracking-[0.12em] text-bg/55">{item.hint}</span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       ) : null}
     </div>
   );
