@@ -1,0 +1,16 @@
+{
+  "name": "justspin-sideload",
+  "private": true,
+  "description": "Capacitor sideload shell for JustSpin. Does not replace the web app.",
+  "scripts": {
+    "sync": "cap sync",
+    "android": "cap open android",
+    "ios": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/cli": "^8.5.1",
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/ios": "^8.5.1"
+  }
+}

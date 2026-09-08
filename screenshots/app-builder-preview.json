@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "JustSpin",
+      "hasCanvas": false,
+      "bodyTextLen": 330,
+      "bodyTextHash": "0b4b05e90650f832000f3ab02397a40b09635c14c8d557a83eae98114cd53989",
+      "bodyTextPrefix": "JustSpin Set city CAN'T DECIDE Let dinner find you. Build the wh",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "JustSpin",
+      "hasCanvas": false,
+      "bodyTextLen": 330,
+      "bodyTextHash": "0b4b05e90650f832000f3ab02397a40b09635c14c8d557a83eae98114cd53989",
+      "bodyTextPrefix": "JustSpin Set city CAN'T DECIDE Let dinner find you. Build the wh",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}

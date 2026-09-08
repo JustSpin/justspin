@@ -1,0 +1,41 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "JustSpin",
+      "hasCanvas": false,
+      "bodyTextLen": 338,
+      "bodyTextHash": "1adb76e9a37739d26263b99f1cc0a62ee6049f896670c88dc53104939d31f7a7",
+      "bodyTextPrefix": "JustSpin Set city Sign in CAN'T DECIDE Let dinner find you. Buil",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "JustSpin",
+      "hasCanvas": false,
+      "bodyTextLen": 338,
+      "bodyTextHash": "1adb76e9a37739d26263b99f1cc0a62ee6049f896670c88dc53104939d31f7a7",
+      "bodyTextPrefix": "JustSpin Set city Sign in CAN'T DECIDE Let dinner find you. Buil",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": true,
+  "baselineReasons": [
+    "desktop: body text replaced (similar length, page start changed)",
+    "mobile: body text replaced (similar length, page start changed)"
+  ]
+}

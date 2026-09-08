@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">JustSpin</string>
+    <string name="title_activity_main">JustSpin</string>
+    <string name="package_name">com.northfold.justspin</string>
+    <string name="custom_url_scheme">com.northfold.justspin</string>
+</resources>
