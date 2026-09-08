@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { WheelSlice } from "@/lib/cuisines";
 import { useT } from "@/lib/use-t";
+import { listenMq } from "@/lib/browser";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -138,10 +139,12 @@ export function SpinWheel({
         <div className="absolute inset-0 rounded-full bg-well shadow-[var(--shadow-well)] ring-1 ring-hairline" />
 
         <div
-          className="absolute inset-[10px] overflow-hidden rounded-full"
+          className="wheel-rotor absolute inset-[10px] overflow-hidden rounded-full"
           style={{
-            transform: `rotate(${rotation}deg)`,
+            transform: `rotate(${rotation}deg) translateZ(0)`,
+            WebkitTransform: `rotate(${rotation}deg) translateZ(0)`,
             transition: reduced ? "none" : "transform 4.2s cubic-bezier(0.12, 0.78, 0.08, 1)",
+            WebkitTransition: reduced ? "none" : "transform 4.2s cubic-bezier(0.12, 0.78, 0.08, 1)",
             willChange: busy ? "transform" : undefined,
           }}
         >
@@ -174,11 +177,12 @@ export function SpinWheel({
                       y={ty}
                       fill={s.win ? "var(--color-fg)" : "var(--color-muted)"}
                       fontSize={count > 10 || s.size < 28 ? 6.8 : 8.2}
-                      fontFamily="Figtree, sans-serif"
+                      fontFamily="Figtree, system-ui, sans-serif"
                       fontWeight={600}
-                      letterSpacing="0.08em"
                       textAnchor="middle"
-                      dominantBaseline="middle"
+                      dominantBaseline="central"
+                      alignmentBaseline="middle"
+                      style={{ letterSpacing: "0.08em" }}
                       transform={`rotate(${n(s.mid + (flip ? 180 : 0))} ${tx} ${ty})`}
                     >
                       {s.cuisine.label.toUpperCase()}
@@ -210,6 +214,7 @@ export function SpinWheel({
             "hover:brightness-110 active:scale-[0.96]",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fg/70",
             "disabled:opacity-50 disabled:shadow-none",
+            "touch-manipulation [-webkit-tap-highlight-color:transparent]",
           )}
           aria-label={busy || spinning ? t("spinningAria") : t("spinAria")}
         >
@@ -244,9 +249,7 @@ function usePrefersReducedMotion() {
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     setReduced(mq.matches);
-    const onChange = () => setReduced(mq.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
+    return listenMq(mq, () => setReduced(mq.matches));
   }, []);
   return reduced;
 }

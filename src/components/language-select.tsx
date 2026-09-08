@@ -4,6 +4,7 @@ import { Check, ChevronDown } from "lucide-react";
 import { LOCALES, t, type Locale } from "@/lib/i18n";
 import { useBite } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { onViewportChange, viewportSize } from "@/lib/browser";
 
 type Props = {
   id?: string;
@@ -31,21 +32,27 @@ export function LanguageSelect({
 
   useLayoutEffect(() => {
     if (!open || !btnRef.current) return;
-    const r = btnRef.current.getBoundingClientRect();
-    const pad = 12;
-    const width = Math.min(Math.max(compact ? 300 : r.width, 280), window.innerWidth - pad * 2);
-    const spaceBelow = window.innerHeight - r.bottom - pad;
-    const spaceAbove = r.top - pad;
-    const openUp = spaceBelow < 240 && spaceAbove > spaceBelow;
-    const maxH = Math.max(200, openUp ? spaceAbove : spaceBelow);
-    const left = Math.max(pad, Math.min(r.left, window.innerWidth - width - pad));
-    setPos({
-      top: openUp ? r.top - 8 : r.bottom + 6,
-      left,
-      width,
-      maxH,
-      openUp,
-    });
+    const place = () => {
+      if (!btnRef.current) return;
+      const r = btnRef.current.getBoundingClientRect();
+      const pad = 12;
+      const vv = viewportSize();
+      const width = Math.min(Math.max(compact ? 300 : r.width, 280), vv.width - pad * 2);
+      const spaceBelow = vv.height - (r.bottom - vv.offsetTop) - pad;
+      const spaceAbove = r.top - vv.offsetTop - pad;
+      const openUp = spaceBelow < 240 && spaceAbove > spaceBelow;
+      const maxH = Math.max(200, openUp ? spaceAbove : spaceBelow);
+      const left = Math.max(pad + vv.offsetLeft, Math.min(r.left, vv.offsetLeft + vv.width - width - pad));
+      setPos({
+        top: openUp ? r.top - 8 : r.bottom + 6,
+        left,
+        width,
+        maxH,
+        openUp,
+      });
+    };
+    place();
+    return onViewportChange(place);
   }, [open, compact]);
 
   useEffect(() => {
@@ -57,16 +64,18 @@ export function LanguageSelect({
         btnRef.current?.focus();
       }
     };
-    const onPointer = (e: PointerEvent) => {
+    const onPointer = (e: Event) => {
       const n = e.target as Node;
       if (btnRef.current?.contains(n) || menuRef.current?.contains(n)) return;
       setOpen(false);
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPointer);
+    window.addEventListener("touchstart", onPointer, { passive: true });
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onPointer);
+      window.removeEventListener("touchstart", onPointer);
     };
   }, [open]);
 
@@ -112,7 +121,7 @@ export function LanguageSelect({
               aria-labelledby={`${triggerId}-label`}
               data-language-menu=""
               onPointerDown={(e) => e.stopPropagation()}
-              className="fixed z-[80] overflow-y-auto rounded-lg border border-hairline bg-fg p-1.5 text-bg shadow-[var(--shadow-lift)]"
+              className="fixed z-[80] overflow-y-auto overflow-touch rounded-lg border border-hairline bg-fg p-1.5 text-bg shadow-[var(--shadow-lift)]"
               style={{
                 top: pos.top,
                 left: pos.left,

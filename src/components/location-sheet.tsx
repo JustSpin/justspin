@@ -7,6 +7,7 @@ import { useT } from "@/lib/use-t";
 import type { GeocodeHit } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { lockBody, unlockBody } from "@/lib/browser";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -117,11 +118,10 @@ export function LocationSheet({ open, onOpenChange }: Props) {
       if (e.key === "Escape") onOpenChange(false);
     };
     window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    lockBody();
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
+      unlockBody();
     };
   }, [open, onOpenChange]);
 
@@ -138,7 +138,7 @@ export function LocationSheet({ open, onOpenChange }: Props) {
       <div
         role="dialog"
         aria-labelledby="loc-title"
-        className="relative z-10 flex max-h-[88dvh] w-full max-w-lg flex-col rounded-t-xl border border-border bg-surface p-5 shadow-[var(--shadow-lift)] sm:rounded-xl sm:p-6"
+        className="sheet-panel relative z-10 flex w-full max-w-lg flex-col overflow-auto rounded-t-xl border border-border bg-surface p-5 shadow-[var(--shadow-lift)] sm:rounded-xl sm:p-6"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>

@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { PRICING } from "@/lib/monetize";
 import { useT } from "@/lib/use-t";
 import { LanguageSelect } from "@/components/language-select";
+import { onViewportChange } from "@/lib/browser";
 
 export function MoreMenu() {
   const [open, setOpen] = useState(false);
@@ -18,8 +19,13 @@ export function MoreMenu() {
 
   useLayoutEffect(() => {
     if (!open || !btnRef.current) return;
-    const r = btnRef.current.getBoundingClientRect();
-    setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+    const place = () => {
+      if (!btnRef.current) return;
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, right: Math.max(8, window.innerWidth - r.right) });
+    };
+    place();
+    return onViewportChange(place);
   }, [open]);
 
   useEffect(() => {
@@ -27,16 +33,18 @@ export function MoreMenu() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
-    const onPointer = (e: PointerEvent) => {
+    const onPointer = (e: Event) => {
       const t = e.target as Node;
       if (rootRef.current?.contains(t) || menuRef.current?.contains(t)) return;
       setOpen(false);
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPointer);
+    window.addEventListener("touchstart", onPointer, { passive: true });
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onPointer);
+      window.removeEventListener("touchstart", onPointer);
     };
   }, [open]);
 

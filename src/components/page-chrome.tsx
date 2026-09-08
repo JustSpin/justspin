@@ -16,9 +16,9 @@ export function PageChrome({
 }) {
   const t = useT();
   return (
-    <div className="relative min-h-dvh bg-bg text-fg">
+    <div className="relative min-page bg-bg text-fg">
       <div className="paper-grain pointer-events-none fixed inset-0 opacity-[0.035]" />
-      <header className="sticky top-0 z-30 border-b border-border/80 bg-bg/90 backdrop-blur-md">
+      <header className="safe-header sticky top-0 z-30 border-b border-border/80 bg-bg/90">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-3 px-4">
           <Link to="/" className="flex items-center gap-2 text-fg">
             <LogoMark className="size-7" />

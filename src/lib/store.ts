@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 import {
   ALL_CUISINES,
   DEFAULT_CUISINE_IDS,
@@ -15,6 +15,7 @@ import {
 } from "./cuisines";
 import { isLocale, type Locale } from "./i18n";
 import type { GeoLocation, PlaceBookmark } from "./types";
+import { safeLocalStorage } from "./browser";
 
 type BiteState = {
   location: GeoLocation | null;
@@ -173,6 +174,7 @@ export const useBite = create<BiteState>()(
       name: "spinbite-v1",
       version: 4,
       skipHydration: true,
+      storage: createJSONStorage(() => safeLocalStorage()),
       partialize: (s) => ({
         location: s.location,
         wheel: s.wheel,

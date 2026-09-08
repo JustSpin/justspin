@@ -33,6 +33,8 @@
 
 @layer base {
   html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background: var(--color-bg);
@@ -41,11 +43,42 @@
   }
 
   body {
+    min-height: 100vh;
     min-height: 100dvh;
+    min-height: -webkit-fill-available;
     font-family: var(--font-sans);
     background: var(--color-bg);
     color: var(--color-fg);
+    overflow-x: hidden;
   }
+
+  button,
+  a,
+  [role="button"],
+  summary {
+    -webkit-tap-highlight-color: rgb(232 93 76 / 0.25);
+    touch-action: manipulation;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+    -webkit-appearance: none;
+    appearance: none;
+    border-radius: 0;
+  }
+
+  input[type="search"] {
+    -webkit-appearance: none;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    border-radius: 999px;
+  }
+
 
   h1,
   h2,
@@ -209,4 +242,35 @@
   border: 2px solid var(--color-accent-fg);
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
 }
+
+.min-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+}
+
+.sheet-panel {
+  max-height: 88vh;
+  max-height: 88dvh;
+  padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.safe-header {
+  padding-top: env(safe-area-inset-top, 0px);
+  -webkit-backdrop-filter: saturate(1.2) blur(12px);
+  backdrop-filter: saturate(1.2) blur(12px);
+}
+
+.wheel-rotor {
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.overflow-touch {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
 

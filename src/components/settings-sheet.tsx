@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { MILES_MAX, MILES_MIN, metersToMiles, milesToMeters } from "@/lib/geo";
+import { lockBody, unlockBody } from "@/lib/browser";
 import { useBite } from "@/lib/store";
 import { useT } from "@/lib/use-t";
 import { Button } from "@/components/ui/button";
@@ -28,11 +29,10 @@ export function SettingsSheet({ open, onOpenChange }: Props) {
       if (e.key === "Escape") onOpenChange(false);
     };
     window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    lockBody();
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
+      unlockBody();
     };
   }, [open, onOpenChange]);
 
@@ -49,7 +49,7 @@ export function SettingsSheet({ open, onOpenChange }: Props) {
       <div
         role="dialog"
         aria-labelledby="set-title"
-        className="relative z-10 flex max-h-[88dvh] w-full max-w-lg flex-col overflow-auto rounded-t-xl border border-border bg-surface p-5 shadow-[var(--shadow-lift)] sm:rounded-xl sm:p-6"
+        className="sheet-panel relative z-10 flex w-full max-w-lg flex-col overflow-auto rounded-t-xl border border-border bg-surface p-5 shadow-[var(--shadow-lift)] sm:rounded-xl sm:p-6"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>

@@ -72,7 +72,7 @@ function Home() {
   };
 
   return (
-    <div className="relative min-h-dvh bg-bg">
+    <div className="relative min-page bg-bg">
       <div className="paper-grain pointer-events-none fixed inset-0 opacity-[0.035]" />
       <AppHeader onLocation={() => setLocOpen(true)} onSettings={() => setSetOpen(true)} />
 
