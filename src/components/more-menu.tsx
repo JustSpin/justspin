@@ -7,11 +7,11 @@ import { Separator } from "@/components/ui/separator";
 import { PRICING } from "@/lib/monetize";
 import { useT } from "@/lib/use-t";
 import { LanguageSelect } from "@/components/language-select";
-import { onViewportChange } from "@/lib/browser";
+import { listenOutside, onViewportChange } from "@/lib/browser";
 
 export function MoreMenu() {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, right: 0 });
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
   const t = useT();
   const rootRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -22,7 +22,13 @@ export function MoreMenu() {
     const place = () => {
       if (!btnRef.current) return;
       const r = btnRef.current.getBoundingClientRect();
-      setPos({ top: r.bottom + 4, right: Math.max(8, window.innerWidth - r.right) });
+      const pad = 8;
+      const vh = window.innerHeight;
+      const spaceBelow = vh - r.bottom - pad;
+      const openUp = spaceBelow < 280 && r.top > spaceBelow;
+      const right = Math.max(pad, window.innerWidth - r.right);
+      if (openUp) setPos({ bottom: vh - r.top + 4, right });
+      else setPos({ top: r.bottom + 4, right });
     };
     place();
     return onViewportChange(place);
@@ -33,18 +39,11 @@ export function MoreMenu() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
-    const onPointer = (e: Event) => {
-      const t = e.target as Node;
-      if (rootRef.current?.contains(t) || menuRef.current?.contains(t)) return;
-      setOpen(false);
-    };
     window.addEventListener("keydown", onKey);
-    window.addEventListener("pointerdown", onPointer);
-    window.addEventListener("touchstart", onPointer, { passive: true });
+    const stop = listenOutside([rootRef.current, menuRef.current], () => setOpen(false));
     return () => {
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("pointerdown", onPointer);
-      window.removeEventListener("touchstart", onPointer);
+      stop();
     };
   }, [open]);
 
@@ -57,18 +56,21 @@ export function MoreMenu() {
         aria-label={t("more")}
         aria-expanded={open}
         aria-haspopup="menu"
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={() => setOpen((v) => !v)}
       >
         <EllipsisVertical />
       </Button>
-      {open && typeof document !== "undefined"
+      {open && pos && typeof document !== "undefined"
         ? createPortal(
             <div
               ref={menuRef}
               role="menu"
               aria-label={t("menu")}
-              className="fixed z-50 w-64 rounded-lg border border-border bg-surface p-1.5 shadow-[var(--shadow-lift)]"
-              style={{ top: pos.top, right: pos.right }}
+              data-float-menu=""
+              onPointerDown={(e) => e.stopPropagation()}
+              className="fixed z-[110] max-h-[min(24rem,70vh)] w-[min(18rem,calc(100vw-1.5rem))] overflow-y-auto overflow-touch rounded-lg border border-border bg-surface p-1.5 shadow-[var(--shadow-lift)]"
+              style={{ top: pos.top, bottom: pos.bottom, right: pos.right }}
             >
               <div className="px-2 pb-2 pt-1.5">
                 <LanguageSelect labeled id="menu-language" />

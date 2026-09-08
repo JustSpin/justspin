@@ -4,7 +4,7 @@ import { Check, ChevronDown } from "lucide-react";
 import { LOCALES, t, type Locale } from "@/lib/i18n";
 import { useBite } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { onViewportChange, viewportSize } from "@/lib/browser";
+import { listenOutside, onViewportChange, placeMenu, type MenuBox } from "@/lib/browser";
 
 type Props = {
   id?: string;
@@ -28,28 +28,13 @@ export function LanguageSelect({
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 280, maxH: 420, openUp: false });
+  const [pos, setPos] = useState<MenuBox | null>(null);
 
   useLayoutEffect(() => {
     if (!open || !btnRef.current) return;
     const place = () => {
       if (!btnRef.current) return;
-      const r = btnRef.current.getBoundingClientRect();
-      const pad = 12;
-      const vv = viewportSize();
-      const width = Math.min(Math.max(compact ? 300 : r.width, 280), vv.width - pad * 2);
-      const spaceBelow = vv.height - (r.bottom - vv.offsetTop) - pad;
-      const spaceAbove = r.top - vv.offsetTop - pad;
-      const openUp = spaceBelow < 240 && spaceAbove > spaceBelow;
-      const maxH = Math.max(200, openUp ? spaceAbove : spaceBelow);
-      const left = Math.max(pad + vv.offsetLeft, Math.min(r.left, vv.offsetLeft + vv.width - width - pad));
-      setPos({
-        top: openUp ? r.top - 8 : r.bottom + 6,
-        left,
-        width,
-        maxH,
-        openUp,
-      });
+      setPos(placeMenu(btnRef.current.getBoundingClientRect(), compact ? 280 : 0, 240));
     };
     place();
     return onViewportChange(place);
@@ -64,18 +49,11 @@ export function LanguageSelect({
         btnRef.current?.focus();
       }
     };
-    const onPointer = (e: Event) => {
-      const n = e.target as Node;
-      if (btnRef.current?.contains(n) || menuRef.current?.contains(n)) return;
-      setOpen(false);
-    };
     window.addEventListener("keydown", onKey);
-    window.addEventListener("pointerdown", onPointer);
-    window.addEventListener("touchstart", onPointer, { passive: true });
+    const stop = listenOutside([btnRef.current, menuRef.current], () => setOpen(false));
     return () => {
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("pointerdown", onPointer);
-      window.removeEventListener("touchstart", onPointer);
+      stop();
     };
   }, [open]);
 
@@ -102,6 +80,7 @@ export function LanguageSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-labelledby={`${triggerId}-label`}
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={() => setOpen((v) => !v)}
         className={cn(
           "flex items-center gap-2 rounded-md text-left text-fg",
@@ -113,21 +92,22 @@ export function LanguageSelect({
         <span className="min-w-0 flex-1 truncate text-base font-semibold leading-tight">{current.native}</span>
         <ChevronDown className={cn("size-4 shrink-0 text-muted", open && "rotate-180")} />
       </button>
-      {open && typeof document !== "undefined"
+      {open && pos && typeof document !== "undefined"
         ? createPortal(
             <div
               ref={menuRef}
               role="listbox"
               aria-labelledby={`${triggerId}-label`}
+              data-float-menu=""
               data-language-menu=""
               onPointerDown={(e) => e.stopPropagation()}
-              className="fixed z-[80] overflow-y-auto overflow-touch rounded-lg border border-hairline bg-fg p-1.5 text-bg shadow-[var(--shadow-lift)]"
+              className="fixed z-[120] overflow-y-auto overflow-touch rounded-lg border border-hairline bg-fg p-1.5 text-bg shadow-[var(--shadow-lift)]"
               style={{
                 top: pos.top,
+                bottom: pos.bottom,
                 left: pos.left,
                 width: pos.width,
                 maxHeight: pos.maxH,
-                transform: pos.openUp ? "translateY(-100%)" : undefined,
               }}
             >
               {LOCALES.map((l) => {

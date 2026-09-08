@@ -249,12 +249,19 @@
   min-height: -webkit-fill-available;
 }
 
+.overflow-touch {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
 .sheet-panel {
   max-height: 88vh;
   max-height: 88dvh;
   padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .safe-header {
@@ -268,9 +275,5 @@
   backface-visibility: hidden;
 }
 
-.overflow-touch {
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-}
 
 

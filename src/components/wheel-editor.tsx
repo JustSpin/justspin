@@ -15,7 +15,7 @@ import { useT } from "@/lib/use-t";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { onViewportChange, viewportSize } from "@/lib/browser";
+import { onViewportChange, listenOutside, placeMenu, type MenuBox } from "@/lib/browser";
 
 const FEATURED_ORDER = [...FEATURED_EXTRA_IDS];
 const FEATURED = new Set<string>(FEATURED_EXTRA_IDS);
@@ -214,7 +214,7 @@ function AddSliceMenu({
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 280, maxH: 320, openUp: false });
+  const [pos, setPos] = useState<MenuBox | null>(null);
   const total = groups.reduce((n, g) => n + g.items.length, 0);
   const q = query.trim().toLowerCase();
   const filtered = groups
@@ -235,22 +235,7 @@ function AddSliceMenu({
     if (!open || !btnRef.current) return;
     const place = () => {
       if (!btnRef.current) return;
-      const r = btnRef.current.getBoundingClientRect();
-      const pad = 12;
-      const vv = viewportSize();
-      const width = Math.min(r.width, vv.width - pad * 2);
-      const spaceBelow = vv.height - (r.bottom - vv.offsetTop) - pad;
-      const spaceAbove = r.top - vv.offsetTop - pad;
-      const openUp = spaceBelow < 220 && spaceAbove > spaceBelow;
-      const maxH = Math.max(180, Math.min(360, openUp ? spaceAbove : spaceBelow));
-      const left = Math.max(pad + vv.offsetLeft, Math.min(r.left, vv.offsetLeft + vv.width - width - pad));
-      setPos({
-        top: openUp ? r.top - 8 : r.bottom + 6,
-        left,
-        width,
-        maxH,
-        openUp,
-      });
+      setPos(placeMenu(btnRef.current.getBoundingClientRect(), 0, 200));
     };
     place();
     return onViewportChange(place);
@@ -258,24 +243,16 @@ function AddSliceMenu({
 
   useEffect(() => {
     if (!open) return;
-    const onPointer = (e: Event) => {
-      const n = e.target as Node;
-      if (btnRef.current?.contains(n) || menuRef.current?.contains(n)) return;
-      setOpen(false);
-    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
       setOpen(false);
     };
-    document.addEventListener("pointerdown", onPointer);
-    document.addEventListener("touchstart", onPointer, { passive: true });
     document.addEventListener("keydown", onKey, true);
-    searchRef.current?.focus();
+    const stop = listenOutside([btnRef.current, menuRef.current], () => setOpen(false));
     return () => {
-      document.removeEventListener("pointerdown", onPointer);
-      document.removeEventListener("touchstart", onPointer);
       document.removeEventListener("keydown", onKey, true);
+      stop();
     };
   }, [open]);
 
@@ -292,6 +269,7 @@ function AddSliceMenu({
         aria-expanded={open}
         aria-label={triggerLabel}
         disabled={disabled}
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={() => setOpen((v) => !v)}
         className="flex h-11 w-full items-center justify-between gap-3 rounded-md border border-border bg-well px-3.5 text-left text-sm text-fg outline-none transition-colors duration-150 hover:border-fg/30 focus-visible:ring-2 focus-visible:ring-accent/60 disabled:opacity-40"
       >
@@ -301,17 +279,18 @@ function AddSliceMenu({
         </span>
         <ChevronDown className={cn("size-4 shrink-0 text-subtle transition-transform duration-150", open && "rotate-180")} />
       </button>
-      {open && typeof document !== "undefined"
+      {open && pos && typeof document !== "undefined"
         ? createPortal(
             <div
               ref={menuRef}
-              className="fixed z-[90] overflow-hidden rounded-md border border-hairline bg-fg text-bg shadow-[var(--shadow-lift)]"
+              data-float-menu=""
+              className="fixed z-[130] overflow-hidden rounded-md border border-hairline bg-fg text-bg shadow-[var(--shadow-lift)]"
               style={{
                 top: pos.top,
+                bottom: pos.bottom,
                 left: pos.left,
                 width: pos.width,
                 maxHeight: pos.maxH,
-                transform: pos.openUp ? "translateY(-100%)" : undefined,
               }}
               onPointerDown={(e) => e.stopPropagation()}
             >

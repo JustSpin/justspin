@@ -51,7 +51,6 @@ export function lockBody() {
     document.body.style.left = "0";
     document.body.style.right = "0";
     document.body.style.width = "100%";
-    document.body.style.touchAction = "none";
   }
   locks += 1;
 }
@@ -69,7 +68,6 @@ export function unlockBody() {
   document.body.style.left = "";
   document.body.style.right = "";
   document.body.style.width = "";
-  document.body.style.touchAction = "";
   window.scrollTo(0, scrollY);
 }
 
@@ -98,3 +96,50 @@ export function safeLocalStorage(): {
     return memory;
   }
 }
+
+export type MenuBox = {
+  top?: number;
+  bottom?: number;
+  left: number;
+  width: number;
+  maxH: number;
+};
+
+/** Place a fixed menu from a trigger rect. Layout viewport only — mixing
+ * visualViewport with position:fixed puts menus off-screen on iOS. */
+export function placeMenu(r: DOMRect, minWidth = 0, needBelow = 220): MenuBox {
+  const pad = 12;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const width = Math.min(Math.max(minWidth, r.width), vw - pad * 2);
+  const spaceBelow = vh - r.bottom - pad;
+  const spaceAbove = r.top - pad;
+  const openUp = spaceBelow < needBelow && spaceAbove > spaceBelow;
+  const maxH = Math.max(160, Math.min(380, openUp ? spaceAbove : spaceBelow));
+  const left = Math.max(pad, Math.min(r.left, vw - width - pad));
+  if (openUp) return { bottom: vh - r.top + 6, left, width, maxH };
+  return { top: r.bottom + 6, left, width, maxH };
+}
+
+/** Close on outside pointer after a short delay so the opening tap does not close. */
+export function listenOutside(inside: Array<Element | null>, close: () => void): () => void {
+  let live = true;
+  const onPointer = (e: Event) => {
+    if (!live) return;
+    const n = e.target;
+    if (!(n instanceof Node)) return;
+    if (inside.some((el) => el?.contains(n))) return;
+    if (n instanceof Element && n.closest("[data-float-menu]")) return;
+    close();
+  };
+  const id = window.setTimeout(() => {
+    document.addEventListener("pointerdown", onPointer, true);
+  }, 80);
+  return () => {
+    live = false;
+    window.clearTimeout(id);
+    document.removeEventListener("pointerdown", onPointer, true);
+  };
+}
+
+
