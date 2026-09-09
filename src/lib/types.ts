@@ -13,6 +13,11 @@ export type Place = {
   source: PlaceSource;
   blurb?: string;
   featured?: boolean;
+  rating?: number | null;
+  ratingCount?: number | null;
+  priceLevel?: number | null;
+  openNow?: boolean | null;
+  hours?: string | null;
 };
 
 export type PlaceBookmark = {
@@ -41,5 +46,5 @@ export type GeocodeHit = {
 
 export type SearchPlacesResult = {
   nearby: Place[];
-  source: "overpass" | "fallback";
+  source: "overpass" | "fallback" | "google" | "yelp";
 };

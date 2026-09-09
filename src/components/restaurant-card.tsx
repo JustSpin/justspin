@@ -1,9 +1,10 @@
-import { ExternalLink, Heart, MapPinned, Phone } from "lucide-react";
+import { ExternalLink, Heart, MapPinned, Phone, Star } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { toggleStar } from "@/lib/account";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { mapsDirectionsUrl, mapsPlaceUrl, orderLinks } from "@/lib/monetize";
 import { formatMiles } from "@/lib/geo";
+import { compactHours, isOpenAt, localClock } from "@/lib/hours";
 import { useBite } from "@/lib/store";
 import { useT } from "@/lib/use-t";
 import type { Place } from "@/lib/types";
@@ -29,6 +30,9 @@ export function RestaurantCard({ place, city, index }: Props) {
     place.lat != null && place.lon != null
       ? mapsDirectionsUrl(place.lat, place.lon, place.name)
       : mapsPlaceUrl(place.name, city);
+  const openNow =
+    place.openNow ?? (place.hours ? isOpenAt(place.hours, localClock()) : null);
+  const hours = compactHours(place.hours);
 
   const bookmark = {
     placeId: place.id,
@@ -76,8 +80,11 @@ export function RestaurantCard({ place, city, index }: Props) {
             {place.featured ? <Badge variant="chili">{t("tonightsTable")}</Badge> : null}
             {place.source === "chain" ? <Badge>{t("deliveryPartner")}</Badge> : null}
             {place.source === "partner" ? <Badge variant="chili">{t("featured")}</Badge> : null}
+            {openNow === true ? <Badge variant="chili">{t("openNow")}</Badge> : null}
+            {openNow === false ? <Badge>{t("closedNow")}</Badge> : null}
           </div>
           <h3 className="font-display mt-1 truncate text-xl tracking-tight">{place.name}</h3>
+          <RatingRow place={place} />
           <p className="mt-1 text-sm text-muted">
             {[
               formatMiles(place.distanceMiles, t("mi")),
@@ -87,6 +94,7 @@ export function RestaurantCard({ place, city, index }: Props) {
               .filter(Boolean)
               .join(" · ")}
           </p>
+          {hours ? <p className="mt-1 text-xs text-subtle">{hours}</p> : null}
           {place.cuisineTags.length > 0 ? (
             <p className="mt-1 text-xs uppercase tracking-[0.12em] text-subtle">
               {place.cuisineTags.join(" · ")}
@@ -142,6 +150,47 @@ export function RestaurantCard({ place, city, index }: Props) {
         </p>
       ) : null}
     </article>
+  );
+}
+
+function RatingRow({ place }: { place: Place }) {
+  const t = useT();
+  if (place.rating == null && !place.priceLevel) return null;
+  const dollars =
+    place.priceLevel && place.priceLevel > 0
+      ? "$".repeat(Math.min(4, Math.round(place.priceLevel)))
+      : null;
+  return (
+    <p className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+      {place.rating != null ? (
+        <span className="inline-flex items-center gap-1.5">
+          <Stars value={place.rating} />
+          <span className="font-medium tabular-nums text-fg">{place.rating.toFixed(1)}</span>
+          {place.ratingCount != null && place.ratingCount > 0 ? (
+            <span className="text-subtle">({t("reviewCount", { n: place.ratingCount })})</span>
+          ) : null}
+        </span>
+      ) : null}
+      {dollars ? <span className="text-muted">{dollars}</span> : null}
+    </p>
+  );
+}
+
+function Stars({ value }: { value: number }) {
+  return (
+    <span className="inline-flex items-center gap-px" aria-label={`${value.toFixed(1)} out of 5`}>
+      {Array.from({ length: 5 }, (_, i) => {
+        const fill = Math.min(1, Math.max(0, value - i));
+        return (
+          <span key={i} className="relative size-3.5 shrink-0">
+            <Star className="size-3.5 text-hairline" />
+            <span className="absolute inset-0 overflow-hidden" style={{ width: `${fill * 100}%` }}>
+              <Star className="size-3.5 fill-accent text-accent" />
+            </span>
+          </span>
+        );
+      })}
+    </span>
   );
 }
 

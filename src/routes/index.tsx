@@ -24,7 +24,7 @@ function Home() {
   const [winner, setWinner] = useState<WheelSlice | null>(null);
   const [nearby, setNearby] = useState<Place[]>([]);
   const [loading, setLoading] = useState(false);
-  const [source, setSource] = useState<"overpass" | "fallback" | null>(null);
+  const [source, setSource] = useState<"overpass" | "fallback" | "google" | "yelp" | null>(null);
   const spinSeq = useRef(0);
 
   const beginSpin = () => {
@@ -57,6 +57,7 @@ function Home() {
           cuisineId: cuisine.id,
           osm: cuisine.osm,
           radiusMeters: radius,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
       });
       if (seq !== spinSeq.current) return;

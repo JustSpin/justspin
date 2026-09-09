@@ -1,6 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { cuisineById, sanitizeOsm } from "./cuisines";
 import { haversineMiles, milesToMeters, MILES_MAX, MILES_MIN } from "./geo";
+import { compactHours, isOpenAt, localClock, looksPermanentlyClosed } from "./hours";
+import { rankPlaces, searchRatedPlaces } from "./live-places";
+import type { Clock } from "./hours";
 import type { GeocodeHit, Place, SearchPlacesResult } from "./types";
 
 const NOMINATIM = "https://nominatim.openstreetmap.org";
@@ -67,7 +70,16 @@ export const reverseGeocode = createServerFn({ method: "POST" })
   });
 
 export const searchPlaces = createServerFn({ method: "POST" })
-  .validator((input: { lat: number; lon: number; cuisineId: string; osm?: string; radiusMeters: number }) => input)
+  .validator(
+    (input: {
+      lat: number;
+      lon: number;
+      cuisineId: string;
+      osm?: string;
+      radiusMeters: number;
+      timeZone?: string;
+    }) => input,
+  )
   .handler(async ({ data }): Promise<SearchPlacesResult> => {
     const cuisine = cuisineById(data.cuisineId);
     const osm = sanitizeOsm(data.osm ?? "") || cuisine?.osm;
@@ -76,7 +88,18 @@ export const searchPlaces = createServerFn({ method: "POST" })
       Math.max(data.radiusMeters, milesToMeters(MILES_MIN)),
       milesToMeters(MILES_MAX),
     );
-    const nearby = await queryOverpass(data.lat, data.lon, osm, radius);
+    const live = await searchRatedPlaces({
+      lat: data.lat,
+      lon: data.lon,
+      radiusMeters: radius,
+      query: cuisine?.search || cuisine?.label || data.cuisineId,
+      cuisineId: data.cuisineId,
+    });
+    if (live?.places.length) {
+      return { nearby: live.places, source: live.source };
+    }
+    const clock = localClock(data.timeZone?.slice(0, 80) || null);
+    const nearby = await queryOverpass(data.lat, data.lon, osm, radius, clock);
     return { nearby, source: nearby.length ? "overpass" : "fallback" };
   });
 
@@ -106,7 +129,7 @@ export const askBite = createServerFn({ method: "POST" })
           },
           {
             role: "user",
-            content: `It is ${moment} in ${data.city || "town"}. Cuisine: ${data.cuisine}. Places: ${list || "delivery chains"}.`,
+            content: `It is ${moment} in ${data.city || "town"}. Cuisine: ${data.cuisine}. Open, in-business places with ratings when we have them: ${list || "delivery chains"}. Prefer higher ratings. Skip anything that sounds closed.`,
           },
         ],
       }),
@@ -136,12 +159,13 @@ async function queryOverpass(
   lon: number,
   osm: string,
   radius: number,
+  clock: Clock,
 ): Promise<Place[]> {
   const ql = `[out:json][timeout:25];
 (
-  nwr["amenity"~"restaurant|fast_food|cafe|food_court"]["cuisine"~"${osm}",i](around:${radius},${lat},${lon});
+  nwr["amenity"~"restaurant|fast_food|cafe|food_court"]["cuisine"~"${osm}",i]["name"]["disused"!="yes"]["abandoned"!="yes"]["closed"!="yes"]["opening_hours"!="closed"]["opening_hours"!="off"]["disused:amenity"!~"."]["abandoned:amenity"!~"."]["was:amenity"!~"."](around:${radius},${lat},${lon});
 );
-out tags center 30;`;
+out tags center meta 40;`;
 
   for (const host of OVERPASS_HOSTS) {
     try {
@@ -157,11 +181,10 @@ out tags center 30;`;
       if (!res.ok) continue;
       const json = (await res.json()) as { elements?: OsmEl[] };
       const places = (json.elements ?? [])
-        .map((el) => toPlace(el, lat, lon))
+        .map((el) => toPlace(el, lat, lon, clock))
         .filter((p): p is Place => Boolean(p));
-      const deduped = dedupePlaces(places);
-      deduped.sort((a, b) => (a.distanceMiles ?? 99) - (b.distanceMiles ?? 99));
-      if (deduped.length) return deduped.slice(0, 14);
+      const deduped = rankPlaces(dedupePlaces(places));
+      if (deduped.length) return deduped;
     } catch {
       // try next host
     }
@@ -169,10 +192,11 @@ out tags center 30;`;
   return [];
 }
 
-function toPlace(el: OsmEl, originLat: number, originLon: number): Place | null {
+function toPlace(el: OsmEl, originLat: number, originLon: number, clock: Clock): Place | null {
   const tags = el.tags ?? {};
   const name = tags.name || tags["name:en"];
   if (!name) return null;
+  if (isOsmClosed(tags, name)) return null;
   const lat = el.lat ?? el.center?.lat ?? null;
   const lon = el.lon ?? el.center?.lon ?? null;
   const distanceMiles =
@@ -185,6 +209,8 @@ function toPlace(el: OsmEl, originLat: number, originLon: number): Place | null 
   const address = [tags["addr:housenumber"], tags["addr:street"], tags["addr:city"]]
     .filter(Boolean)
     .join(" ");
+  const rated = osmRating(tags);
+  const hours = tags.opening_hours && tags.opening_hours !== "closed" ? tags.opening_hours : null;
   return {
     id: `osm-${el.type}-${el.id}`,
     name,
@@ -196,7 +222,29 @@ function toPlace(el: OsmEl, originLat: number, originLon: number): Place | null 
     phone: tags.phone || tags["contact:phone"] || null,
     website: tags.website || tags["contact:website"] || null,
     source: "nearby",
+    rating: rated.rating,
+    ratingCount: rated.count,
+    hours: compactHours(hours) ?? hours,
+    openNow: hours ? isOpenAt(hours, clock) : null,
   };
+}
+
+function isOsmClosed(tags: Record<string, string>, name: string): boolean {
+  if (tags.opening_hours === "closed" || tags.opening_hours === "off") return true;
+  if (tags.disused === "yes" || tags.abandoned === "yes" || tags.closed === "yes") return true;
+  if (tags.access === "no") return true;
+  if (tags["disused:amenity"] || tags["abandoned:amenity"] || tags["was:amenity"]) return true;
+  if (tags.end_date) return true;
+  return looksPermanentlyClosed(name, tags.description, tags.note, tags.fixme, tags.opening_hours);
+}
+
+function osmRating(tags: Record<string, string>): { rating: number | null; count: number | null } {
+  const raw = tags.stars || tags.rating || tags["rating:google"] || tags["stars:tripadvisor"];
+  const n = raw ? Number(String(raw).replace(/[^0-9.]/g, "")) : NaN;
+  const rating = Number.isFinite(n) && n > 0 && n <= 5 ? n : null;
+  const countRaw = tags["rating:count"] || tags.votes;
+  const count = countRaw ? Number(countRaw) : null;
+  return { rating, count: count && Number.isFinite(count) ? count : null };
 }
 
 function dedupePlaces(places: Place[]): Place[] {

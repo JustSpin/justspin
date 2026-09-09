@@ -13,8 +13,8 @@ const SEEDS: ChainSeed[] = [
   { cuisineId: "pizza", name: "Domino's", blurb: "The reliable late-night delivery pie." },
   { cuisineId: "burger", name: "Shake Shack", blurb: "Smash-style burgers and frozen custard." },
   { cuisineId: "burger", name: "Five Guys", blurb: "Cajun fries and as many toppings as you want." },
-  { cuisineId: "sushi", name: "Sushi Counter", blurb: "Grab-and-go rolls when you don't want to sit." },
-  { cuisineId: "thai", name: "Thai Express", blurb: "Pad thai and curries, delivery-first." },
+  { cuisineId: "sushi", name: "Kura Sushi", blurb: "Revolving-rail sushi still spinning in the US." },
+  { cuisineId: "thai", name: "Noodles & Company", blurb: "Pad thai and noodle bowls, still on the apps." },
   { cuisineId: "indian", name: "Curry Up Now", blurb: "Modern Indian comfort, bowls and wraps." },
   { cuisineId: "chinese", name: "Panda Express", blurb: "Orange chicken when the craving is specific." },
   { cuisineId: "bbq", name: "Dickey's Barbecue Pit", blurb: "Brisket, ribs, and a tray of sides." },
@@ -22,6 +22,11 @@ const SEEDS: ChainSeed[] = [
   { cuisineId: "korean", name: "Bonchon", blurb: "Soy-garlic and spicy fried chicken." },
   { cuisineId: "med", name: "CAVA", blurb: "Greens, grains, and a very serious hot bar." },
   { cuisineId: "comfort", name: "The Cheesecake Factory", blurb: "A menu long enough to end any argument." },
+  { cuisineId: "filipino", name: "Jollibee", blurb: "Chickenjoy and spaghetti, still expanding." },
+  { cuisineId: "brazilian", name: "Fogo de Chão", blurb: "Rodízio steakhouse, still carving." },
+  { cuisineId: "caribbean", name: "Bahama Breeze", blurb: "Island plates from a chain that's still open." },
+  { cuisineId: "vietnamese", name: "Pho Hoa", blurb: "Pho shops that are still on the map." },
+  { cuisineId: "greek", name: "The Great Greek Grill", blurb: "Gyros and lemon potatoes, still grilling." },
 ];
 
 export function chainsForCuisine(cuisineId: string, city: string, label?: string): Place[] {

@@ -19,7 +19,7 @@ type Props = {
   cuisine: Cuisine;
   nearby: Place[];
   loading: boolean;
-  source: "overpass" | "fallback" | null;
+  source: "overpass" | "fallback" | "google" | "yelp" | null;
   onSpinAgain: () => void;
 };
 
@@ -78,7 +78,14 @@ export function ResultsPanel({ cuisine, nearby, loading, source, onSpinAgain }: 
         featured?.name,
         ...restNearby.map((p) => p.name),
         ...partners.map((p) => p.name),
-      ].filter(Boolean) as string[];
+      ]
+        .filter(Boolean)
+        .map((name) => {
+          const hit = [featured, ...restNearby].find((p) => p?.name === name);
+          if (!hit?.rating) return name as string;
+          const n = hit.ratingCount ? `, ${hit.ratingCount} reviews` : "";
+          return `${name} (${hit.rating.toFixed(1)}${n})`;
+        }) as string[];
       const res = await askBite({
         data: { cuisine: cuisine.label, city, names },
       });
@@ -146,8 +153,22 @@ export function ResultsPanel({ cuisine, nearby, loading, source, onSpinAgain }: 
         </div>
       ) : (
         <>
+          {source === "google" ? (
+            <p className="mt-5 text-xs text-subtle">
+              <a href="https://www.google.com/maps" target="_blank" rel="noreferrer">
+                {t("ratingsByGoogle")}
+              </a>
+            </p>
+          ) : null}
+          {source === "yelp" ? (
+            <p className="mt-5 text-xs text-subtle">
+              <a href="https://www.yelp.com" target="_blank" rel="noreferrer">
+                {t("ratingsByYelp")}
+              </a>
+            </p>
+          ) : null}
           {featured ? (
-            <div className="mt-6">
+            <div className={source === "google" || source === "yelp" ? "mt-3" : "mt-6"}>
               <RestaurantCard place={featured} city={city} index={1} />
             </div>
           ) : null}
@@ -161,7 +182,11 @@ export function ResultsPanel({ cuisine, nearby, loading, source, onSpinAgain }: 
           {restNearby.length > 0 ? (
             <div className="mt-8">
               <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-subtle">
-                {source === "overpass" ? t("nearbyOsm") : t("nearbyLocal")}
+                {source === "google" || source === "yelp"
+                  ? t("nearbyRated")
+                  : source === "overpass"
+                    ? t("nearbyOsm")
+                    : t("nearbyLocal")}
               </p>
               <div className="mt-3 space-y-3">
                 {restNearby.map((p, i) => (
