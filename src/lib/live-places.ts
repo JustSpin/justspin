@@ -290,6 +290,24 @@ function isFoodPlace(types?: string[]): boolean {
   );
 }
 
+export function namesClose(a: string, b: string): boolean {
+  const x = normName(a);
+  const y = normName(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [s, l] = x.length < y.length ? [x, y] : [y, x];
+  if (s.length < 5) return false;
+  return l.includes(s) && s.length / l.length >= 0.45;
+}
+
 function slug(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40);
 }
+
+function normName(s: string) {
+  return s
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "");
+}
+

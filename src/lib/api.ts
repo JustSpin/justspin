@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { cuisineById, sanitizeOsm } from "./cuisines";
 import { haversineMiles, milesToMeters, MILES_MAX, MILES_MIN } from "./geo";
 import { compactHours, isOpenAt, localClock, looksPermanentlyClosed } from "./hours";
-import { rankPlaces, searchRatedPlaces } from "./live-places";
+import { namesClose, rankPlaces, searchRatedPlaces } from "./live-places";
 import type { Clock } from "./hours";
 import type { GeocodeHit, Place, SearchPlacesResult } from "./types";
 
@@ -102,6 +102,91 @@ export const searchPlaces = createServerFn({ method: "POST" })
     const nearby = await queryOverpass(data.lat, data.lon, osm, radius, clock);
     return { nearby, source: nearby.length ? "overpass" : "fallback" };
   });
+
+type RatingHit = { name: string; rating: number; reviews: number | null };
+const ratingCache = new Map<string, { at: number; hits: RatingHit[] }>();
+const RATING_CACHE_MS = 6 * 60 * 60 * 1000;
+
+export const fillRatings = createServerFn({ method: "POST" })
+  .validator((input: { city: string; names: string[] }) => input)
+  .handler(async ({ data }): Promise<RatingHit[]> => {
+    const city = data.city.trim().slice(0, 80);
+    const names = [...new Set(data.names.map((n) => n.trim()).filter(Boolean))].slice(0, 10);
+    if (!city || names.length === 0) return [];
+    const cacheKey = `${city.toLowerCase()}|${names.map((n) => n.toLowerCase()).sort().join("|")}`;
+    const cached = ratingCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < RATING_CACHE_MS) return cached.hits;
+    const apiKey = process.env.XAI_API_KEY;
+    if (!apiKey) return [];
+    try {
+      const res = await fetch("https://api.x.ai/v1/responses", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "grok-3-mini",
+          max_output_tokens: 400,
+          tools: [{ type: "web_search" }],
+          input: `Return JSON only, no markdown. Look up current Google Maps or Yelp star ratings for these restaurants in ${city}:
+${names.join("; ")}
+Prefer the Google Maps rating when both exist (usually more reviews).
+Format: [{"name":"exact name","rating":4.3,"reviews":210}]
+Use only numbers you find on Google Maps or Yelp. Omit a place if you cannot find a rating. Never guess or invent a star number.`,
+        }),
+        signal: AbortSignal.timeout(14000),
+      });
+      if (!res.ok) return [];
+      const body = (await res.json()) as {
+        output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>;
+      };
+      const text = (body.output ?? [])
+        .filter((o) => o.type === "message")
+        .flatMap((o) => o.content ?? [])
+        .filter((c) => c.type === "output_text")
+        .map((c) => c.text ?? "")
+        .join("\n");
+      const hits = parseRatingHits(text, names);
+      ratingCache.set(cacheKey, { at: Date.now(), hits });
+      return hits;
+    } catch {
+      return [];
+    }
+  });
+
+function parseRatingHits(text: string, names: string[]): RatingHit[] {
+  const start = text.indexOf("[");
+  const end = text.lastIndexOf("]");
+  if (start < 0 || end <= start) return [];
+  let rows: unknown;
+  try {
+    rows = JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(rows)) return [];
+  const used = new Set<string>();
+  const out: RatingHit[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const rec = row as { name?: unknown; rating?: unknown; reviews?: unknown };
+    if (typeof rec.name !== "string") continue;
+    const rating = typeof rec.rating === "number" ? rec.rating : Number(rec.rating);
+    if (!Number.isFinite(rating) || rating < 1 || rating > 5) continue;
+    const match = names.find((n) => !used.has(n) && namesClose(n, rec.name));
+    if (!match) continue;
+    used.add(match);
+    const reviewsRaw =
+      typeof rec.reviews === "number" ? rec.reviews : Number(String(rec.reviews ?? "").replace(/[^\d]/g, ""));
+    out.push({
+      name: match,
+      rating: Math.round(rating * 10) / 10,
+      reviews: Number.isFinite(reviewsRaw) && reviewsRaw > 0 ? Math.round(reviewsRaw) : null,
+    });
+  }
+  return out;
+}
 
 export const askBite = createServerFn({ method: "POST" })
   .validator((input: { cuisine: string; city: string; names: string[] }) => input)

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { RotateCcw, Sparkles } from "lucide-react";
 import { recordSeenPlaces } from "@/lib/account";
-import { askBite } from "@/lib/api";
+import { askBite, fillRatings } from "@/lib/api";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { chainsForCuisine } from "@/lib/chains";
 import { PRICING } from "@/lib/monetize";
@@ -37,11 +37,46 @@ export function ResultsPanel({ cuisine, nearby, loading, source, onSpinAgain }: 
   const partners = chainsForCuisine(cuisine.id, city, cuisine.label).filter(
     (p) => !nearby.some((n) => n.name.toLowerCase() === p.name.toLowerCase()),
   );
-  const featured = nearby[0] ? { ...nearby[0], featured: true } : null;
-  const restNearby = nearby.slice(featured ? 1 : 0);
   const [advice, setAdvice] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
   const [askError, setAskError] = useState<string | null>(null);
+  const [ratingMap, setRatingMap] = useState<Record<string, { rating: number; ratingCount: number | null }>>(
+    {},
+  );
+
+  useEffect(() => {
+    setRatingMap({});
+  }, [cuisine.id, city]);
+
+  useEffect(() => {
+    if (loading || !city || nearby.length === 0) return;
+    if (nearby.some((p) => p.rating != null)) return;
+    const names = nearby.slice(0, 10).map((p) => p.name);
+    let cancelled = false;
+    void fillRatings({ data: { city, names } })
+      .then((rows) => {
+        if (cancelled || !rows.length) return;
+        const next: Record<string, { rating: number; ratingCount: number | null }> = {};
+        for (const row of rows) {
+          next[row.name] = { rating: row.rating, ratingCount: row.reviews };
+        }
+        setRatingMap(next);
+      })
+      .catch(() => {
+        /* no live ratings */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, nearby, city]);
+
+  const painted = nearby.map((p) => {
+    const extra = ratingMap[p.name];
+    if (!extra || p.rating != null) return p;
+    return { ...p, rating: extra.rating, ratingCount: extra.ratingCount };
+  });
+  const paintedFeatured = painted[0] ? { ...painted[0], featured: true } : null;
+  const paintedRest = painted.slice(paintedFeatured ? 1 : 0);
 
   useEffect(() => {
     if (loading || nearby.length === 0) return;
@@ -75,13 +110,13 @@ export function ResultsPanel({ cuisine, nearby, loading, source, onSpinAgain }: 
     setAskError(null);
     try {
       const names = [
-        featured?.name,
-        ...restNearby.map((p) => p.name),
+        paintedFeatured?.name,
+        ...paintedRest.map((p) => p.name),
         ...partners.map((p) => p.name),
       ]
         .filter(Boolean)
         .map((name) => {
-          const hit = [featured, ...restNearby].find((p) => p?.name === name);
+          const hit = [paintedFeatured, ...paintedRest].find((p) => p?.name === name);
           if (!hit?.rating) return name as string;
           const n = hit.ratingCount ? `, ${hit.ratingCount} reviews` : "";
           return `${name} (${hit.rating.toFixed(1)}${n})`;
@@ -167,9 +202,9 @@ export function ResultsPanel({ cuisine, nearby, loading, source, onSpinAgain }: 
               </a>
             </p>
           ) : null}
-          {featured ? (
+          {paintedFeatured ? (
             <div className={source === "google" || source === "yelp" ? "mt-3" : "mt-6"}>
-              <RestaurantCard place={featured} city={city} index={1} />
+              <RestaurantCard place={paintedFeatured} city={city} index={1} />
             </div>
           ) : null}
 
@@ -179,17 +214,13 @@ export function ResultsPanel({ cuisine, nearby, loading, source, onSpinAgain }: 
             </div>
           ) : null}
 
-          {restNearby.length > 0 ? (
+          {paintedRest.length > 0 ? (
             <div className="mt-8">
               <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-subtle">
-                {source === "google" || source === "yelp"
-                  ? t("nearbyRated")
-                  : source === "overpass"
-                    ? t("nearbyOsm")
-                    : t("nearbyLocal")}
+                {t("nearbyOsm")}
               </p>
               <div className="mt-3 space-y-3">
-                {restNearby.map((p, i) => (
+                {paintedRest.map((p, i) => (
                   <RestaurantCard key={p.id} place={p} city={city} index={i + 2} />
                 ))}
               </div>
@@ -207,14 +238,13 @@ export function ResultsPanel({ cuisine, nearby, loading, source, onSpinAgain }: 
               <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-subtle">
                 {t("orderNow")}
               </p>
-              <p className="mt-1 text-sm text-muted">{t("commissionShort")}</p>
               <div className="mt-3 space-y-3">
                 {partners.map((p, i) => (
                   <RestaurantCard
                     key={p.id}
                     place={p}
                     city={city}
-                    index={(featured ? 1 : 0) + restNearby.length + i + 1}
+                    index={(paintedFeatured ? 1 : 0) + paintedRest.length + i + 1}
                   />
                 ))}
               </div>
