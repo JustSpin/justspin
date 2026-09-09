@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { cuisineById, sanitizeOsm } from "./cuisines";
-import { haversineMiles, milesToMeters, MILES_MAX, MILES_MIN } from "./geo";
+import { haversineMiles, milesToMeters, parseNominatimBox, withinSearch, METERS_PER_MILE, MILES_MAX, MILES_MIN, type BBox, type SearchArea } from "./geo";
 import { compactHours, isOpenAt, localClock, looksPermanentlyClosed } from "./hours";
 import { namesClose, rankPlaces, searchRatedPlaces } from "./live-places";
 import type { Clock } from "./hours";
@@ -39,11 +39,13 @@ export const geocodeCity = createServerFn({ method: "POST" })
       lon: string;
       name?: string;
       address?: Record<string, string>;
+      boundingbox?: string[];
     }>;
     return rows.map((r) => ({
       label: shortLabel(r),
       lat: Number(r.lat),
       lon: Number(r.lon),
+      bbox: parseNominatimBox(r.boundingbox),
     }));
   });
 
@@ -61,11 +63,14 @@ export const reverseGeocode = createServerFn({ method: "POST" })
       address?: Record<string, string>;
       lat?: string;
       lon?: string;
+      boundingbox?: string[];
     };
+    const label = shortLabel(r);
     return {
-      label: shortLabel(r),
+      label,
       lat: data.lat,
       lon: data.lon,
+      bbox: parseNominatimBox(r.boundingbox) ?? (await bboxForCity(label)),
     };
   });
 
@@ -78,6 +83,8 @@ export const searchPlaces = createServerFn({ method: "POST" })
       osm?: string;
       radiusMeters: number;
       timeZone?: string;
+      city?: string;
+      bbox?: BBox | null;
     }) => input,
   )
   .handler(async ({ data }): Promise<SearchPlacesResult> => {
@@ -88,18 +95,28 @@ export const searchPlaces = createServerFn({ method: "POST" })
       Math.max(data.radiusMeters, milesToMeters(MILES_MIN)),
       milesToMeters(MILES_MAX),
     );
+    const city = (data.city ?? "").trim();
+    const bbox = data.bbox ?? (city ? await bboxForCity(city) : null);
+    const area: SearchArea = {
+      radiusMiles: radius / METERS_PER_MILE,
+      city,
+      bbox,
+    };
     const live = await searchRatedPlaces({
       lat: data.lat,
       lon: data.lon,
       radiusMeters: radius,
       query: cuisine?.search || cuisine?.label || data.cuisineId,
       cuisineId: data.cuisineId,
+      city,
     });
     if (live?.places.length) {
-      return { nearby: live.places, source: live.source };
+      const nearby = clipToArea(live.places, area);
+      if (nearby.length) return { nearby, source: live.source };
     }
     const clock = localClock(data.timeZone?.slice(0, 80) || null);
-    const nearby = await queryOverpass(data.lat, data.lon, osm, radius, clock);
+    const osmPlaces = await queryOverpass(data.lat, data.lon, osm, radius, clock);
+    const nearby = clipToArea(osmPlaces, area);
     return { nearby, source: nearby.length ? "overpass" : "fallback" };
   });
 
@@ -239,6 +256,36 @@ function shortLabel(r: {
   return (r.display_name ?? "Pinned location").split(",").slice(0, 2).join(",").trim();
 }
 
+const bboxCache = new Map<string, BBox | null>();
+
+async function bboxForCity(label: string): Promise<BBox | null> {
+  const key = label.toLowerCase().trim();
+  if (!key) return null;
+  if (bboxCache.has(key)) return bboxCache.get(key) ?? null;
+  try {
+    const url = `${NOMINATIM}/search?format=jsonv2&limit=1&addressdetails=1&q=${encodeURIComponent(label)}`;
+    const res = await fetch(url, {
+      headers: { Accept: "application/json", "User-Agent": UA },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) {
+      bboxCache.set(key, null);
+      return null;
+    }
+    const rows = (await res.json()) as Array<{ boundingbox?: string[] }>;
+    const box = parseNominatimBox(rows[0]?.boundingbox);
+    bboxCache.set(key, box);
+    return box;
+  } catch {
+    bboxCache.set(key, null);
+    return null;
+  }
+}
+
+function clipToArea(places: Place[], area: SearchArea): Place[] {
+  return rankPlaces(places.filter((p) => withinSearch(p, area)));
+}
+
 async function queryOverpass(
   lat: number,
   lon: number,
@@ -284,14 +331,14 @@ function toPlace(el: OsmEl, originLat: number, originLon: number, clock: Clock):
   if (isOsmClosed(tags, name)) return null;
   const lat = el.lat ?? el.center?.lat ?? null;
   const lon = el.lon ?? el.center?.lon ?? null;
-  const distanceMiles =
-    lat != null && lon != null ? haversineMiles({ lat: originLat, lon: originLon }, { lat, lon }) : null;
+  if (lat == null || lon == null) return null;
+  const distanceMiles = haversineMiles({ lat: originLat, lon: originLon }, { lat, lon });
   const cuisineTags = (tags.cuisine ?? "")
     .split(/[;,]/)
     .map((s) => s.trim())
     .filter(Boolean)
     .slice(0, 3);
-  const address = [tags["addr:housenumber"], tags["addr:street"], tags["addr:city"]]
+  const address = [tags["addr:housenumber"], tags["addr:street"], tags["addr:city"] || tags["addr:suburb"]]
     .filter(Boolean)
     .join(" ");
   const rated = osmRating(tags);

@@ -1,3 +1,5 @@
+import type { BBox } from "./geo";
+
 export type PlaceSource = "nearby" | "partner" | "chain";
 
 export type Place = {
@@ -36,12 +38,14 @@ export type GeoLocation = {
   lat: number;
   lon: number;
   label: string;
+  bbox?: BBox | null;
 };
 
 export type GeocodeHit = {
   label: string;
   lat: number;
   lon: number;
+  bbox?: BBox | null;
 };
 
 export type SearchPlacesResult = {

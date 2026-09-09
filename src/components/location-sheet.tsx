@@ -58,7 +58,7 @@ export function LocationSheet({ open, onOpenChange }: Props) {
   }, [query, open]);
 
   const pick = (hit: GeocodeHit) => {
-    setLocation({ lat: hit.lat, lon: hit.lon, label: hit.label });
+    setLocation({ lat: hit.lat, lon: hit.lon, label: hit.label, bbox: hit.bbox ?? null });
     onOpenChange(false);
   };
 
@@ -87,6 +87,7 @@ export function LocationSheet({ open, onOpenChange }: Props) {
             lat: pos.coords.latitude,
             lon: pos.coords.longitude,
             label: hit?.label ?? t("currentLocation"),
+            bbox: hit?.bbox ?? null,
           });
           onOpenChange(false);
         } catch {

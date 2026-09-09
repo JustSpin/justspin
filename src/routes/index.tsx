@@ -58,6 +58,8 @@ function Home() {
           osm: cuisine.osm,
           radiusMeters: radius,
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          city: loc.label,
+          bbox: loc.bbox ?? null,
         },
       });
       if (seq !== spinSeq.current) return;

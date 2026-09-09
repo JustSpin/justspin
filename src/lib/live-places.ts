@@ -29,6 +29,7 @@ export async function searchRatedPlaces(input: {
   radiusMeters: number;
   query: string;
   cuisineId: string;
+  city?: string;
 }): Promise<{ places: Place[]; source: "google" | "yelp" } | null> {
   const g = googleKey();
   if (g) {
@@ -43,19 +44,22 @@ export async function searchRatedPlaces(input: {
   return null;
 }
 
-async function googleNearby(
-  input: { lat: number; lon: number; radiusMeters: number; query: string },
-  key: string,
-): Promise<Place[]> {
+type NearbyInput = {
+  lat: number;
+  lon: number;
+  radiusMeters: number;
+  query: string;
+  cuisineId?: string;
+  city?: string;
+};
+
+async function googleNearby(input: NearbyInput, key: string): Promise<Place[]> {
   const fromNew = await googleNearbyNew(input, key);
   if (fromNew.length) return fromNew;
   return googleNearbyLegacy(input, key);
 }
 
-async function googleNearbyNew(
-  input: { lat: number; lon: number; radiusMeters: number; query: string },
-  key: string,
-): Promise<Place[]> {
+async function googleNearbyNew(input: NearbyInput, key: string): Promise<Place[]> {
   try {
     const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
       method: "POST",
@@ -66,13 +70,26 @@ async function googleNearbyNew(
           "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.businessStatus,places.nationalPhoneNumber,places.internationalPhoneNumber,places.websiteUri,places.priceLevel,places.currentOpeningHours,places.types,places.primaryTypeDisplayName",
       },
       body: JSON.stringify({
-        textQuery: `${input.query} restaurant`,
-        locationBias: {
-          circle: {
-            center: { latitude: input.lat, longitude: input.lon },
-            radius: input.radiusMeters,
-          },
-        },
+        textQuery: input.city
+          ? `${input.query} restaurant in ${input.city}`
+          : `${input.query} restaurant`,
+        ...(input.radiusMeters <= 50000
+          ? {
+              locationRestriction: {
+                circle: {
+                  center: { latitude: input.lat, longitude: input.lon },
+                  radius: input.radiusMeters,
+                },
+              },
+            }
+          : {
+              locationBias: {
+                circle: {
+                  center: { latitude: input.lat, longitude: input.lon },
+                  radius: input.radiusMeters,
+                },
+              },
+            }),
         maxResultCount: 20,
       }),
       signal: AbortSignal.timeout(9000),
@@ -97,7 +114,7 @@ async function googleNearbyNew(
       }>;
     };
     const out: Place[] = [];
-    const maxMiles = input.radiusMeters / METERS_PER_MILE + 0.6;
+    const maxMiles = input.radiusMeters / METERS_PER_MILE;
     for (const p of json.places ?? []) {
       if (p.businessStatus && p.businessStatus !== "OPERATIONAL") continue;
       const name = p.displayName?.text?.trim();
@@ -105,11 +122,9 @@ async function googleNearbyNew(
       if (!isFoodPlace(p.types)) continue;
       const lat = p.location?.latitude ?? null;
       const lon = p.location?.longitude ?? null;
-      const distanceMiles =
-        lat != null && lon != null
-          ? haversineMiles({ lat: input.lat, lon: input.lon }, { lat, lon })
-          : null;
-      if (distanceMiles != null && distanceMiles > maxMiles) continue;
+      if (lat == null || lon == null) continue;
+      const distanceMiles = haversineMiles({ lat: input.lat, lon: input.lon }, { lat, lon });
+      if (distanceMiles > maxMiles + 0.05) continue;
       const rating = typeof p.rating === "number" && p.rating > 0 ? p.rating : null;
       out.push({
         id: `ggl-${p.id || slug(name)}`,
@@ -135,15 +150,12 @@ async function googleNearbyNew(
   }
 }
 
-async function googleNearbyLegacy(
-  input: { lat: number; lon: number; radiusMeters: number; query: string },
-  key: string,
-): Promise<Place[]> {
+async function googleNearbyLegacy(input: NearbyInput, key: string): Promise<Place[]> {
   try {
     const url = new URL("https://maps.googleapis.com/maps/api/place/nearbysearch/json");
     url.searchParams.set("location", `${input.lat},${input.lon}`);
     url.searchParams.set("radius", String(Math.min(input.radiusMeters, 50000)));
-    url.searchParams.set("keyword", input.query);
+    url.searchParams.set("keyword", input.city ? `${input.query} ${input.city}` : input.query);
     url.searchParams.set("type", "restaurant");
     url.searchParams.set("key", key);
     const res = await fetch(url, { signal: AbortSignal.timeout(9000) });
@@ -164,7 +176,7 @@ async function googleNearbyLegacy(
       }>;
     };
     const out: Place[] = [];
-    const maxMiles = input.radiusMeters / METERS_PER_MILE + 0.6;
+    const maxMiles = input.radiusMeters / METERS_PER_MILE;
     for (const p of json.results ?? []) {
       if (p.business_status && p.business_status !== "OPERATIONAL") continue;
       const name = p.name?.trim();
@@ -172,11 +184,9 @@ async function googleNearbyLegacy(
       if (!isFoodPlace(p.types)) continue;
       const lat = p.geometry?.location?.lat ?? null;
       const lon = p.geometry?.location?.lng ?? null;
-      const distanceMiles =
-        lat != null && lon != null
-          ? haversineMiles({ lat: input.lat, lon: input.lon }, { lat, lon })
-          : null;
-      if (distanceMiles != null && distanceMiles > maxMiles) continue;
+      if (lat == null || lon == null) continue;
+      const distanceMiles = haversineMiles({ lat: input.lat, lon: input.lon }, { lat, lon });
+      if (distanceMiles > maxMiles + 0.05) continue;
       out.push({
         id: `ggl-${p.place_id || slug(name)}`,
         name,
@@ -202,16 +212,13 @@ async function googleNearbyLegacy(
   }
 }
 
-async function yelpNearby(
-  input: { lat: number; lon: number; radiusMeters: number; query: string; cuisineId: string },
-  key: string,
-): Promise<Place[]> {
+async function yelpNearby(input: NearbyInput, key: string): Promise<Place[]> {
   try {
     const url = new URL("https://api.yelp.com/v3/businesses/search");
     url.searchParams.set("latitude", String(input.lat));
     url.searchParams.set("longitude", String(input.lon));
     url.searchParams.set("radius", String(Math.min(input.radiusMeters, 40000)));
-    url.searchParams.set("term", `${input.query} restaurant`);
+    url.searchParams.set("term", input.city ? `${input.query} restaurant ${input.city}` : `${input.query} restaurant`);
     url.searchParams.set("categories", "restaurants");
     url.searchParams.set("limit", "20");
     url.searchParams.set("sort_by", "rating");
@@ -236,18 +243,16 @@ async function yelpNearby(
       }>;
     };
     const out: Place[] = [];
-    const maxMiles = input.radiusMeters / METERS_PER_MILE + 0.6;
+    const maxMiles = input.radiusMeters / METERS_PER_MILE;
     for (const p of json.businesses ?? []) {
       if (p.is_closed) continue;
       const name = p.name?.trim();
       if (!name || looksPermanentlyClosed(name)) continue;
       const lat = p.coordinates?.latitude ?? null;
       const lon = p.coordinates?.longitude ?? null;
-      const distanceMiles =
-        lat != null && lon != null
-          ? haversineMiles({ lat: input.lat, lon: input.lon }, { lat, lon })
-          : null;
-      if (distanceMiles != null && distanceMiles > maxMiles) continue;
+      if (lat == null || lon == null) continue;
+      const distanceMiles = haversineMiles({ lat: input.lat, lon: input.lon }, { lat, lon });
+      if (distanceMiles > maxMiles + 0.05) continue;
       out.push({
         id: `yelp-${p.id || slug(name)}`,
         name,

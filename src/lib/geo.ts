@@ -40,3 +40,79 @@ export function milesToMeters(miles: number): number {
 export function metersToMiles(meters: number): number {
   return clampMiles(meters / METERS_PER_MILE);
 }
+
+export type BBox = {
+  south: number;
+  north: number;
+  west: number;
+  east: number;
+};
+
+export function parseNominatimBox(raw?: Array<string | number> | null): BBox | null {
+  if (!raw || raw.length < 4) return null;
+  const south = Number(raw[0]);
+  const north = Number(raw[1]);
+  const west = Number(raw[2]);
+  const east = Number(raw[3]);
+  if (![south, north, west, east].every(Number.isFinite)) return null;
+  if (south >= north) return null;
+  return { south, north, west, east };
+}
+
+export function inBBox(lat: number, lon: number, box: BBox, padDeg = 0.008): boolean {
+  return (
+    lat >= box.south - padDeg &&
+    lat <= box.north + padDeg &&
+    lon >= box.west - padDeg &&
+    lon <= box.east + padDeg
+  );
+}
+
+export function cityKey(label: string): string {
+  return (label.split(",")[0] ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function mentionsCity(text: string | null | undefined, city: string): boolean | null {
+  if (!text) return null;
+  const key = cityKey(city);
+  if (key.length < 3) return null;
+  const hay = text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (hay.includes(key)) return true;
+  const compact = (s: string) => s.replace(/ /g, "");
+  if (compact(hay).includes(compact(key))) return true;
+  return false;
+}
+
+export type SearchArea = {
+  radiusMiles: number;
+  city: string;
+  bbox: BBox | null;
+};
+
+export function withinSearch(
+  place: {
+    lat: number | null;
+    lon: number | null;
+    distanceMiles: number | null;
+    address?: string | null;
+    name?: string;
+  },
+  area: SearchArea,
+): boolean {
+  if (place.lat == null || place.lon == null || place.distanceMiles == null) return false;
+  if (place.distanceMiles > area.radiusMiles + 0.05) return false;
+  if (area.bbox && !inBBox(place.lat, place.lon, area.bbox)) return false;
+  if (!area.bbox) {
+    const named = mentionsCity(place.address, area.city) ?? mentionsCity(place.name, area.city);
+    if (named === false) return false;
+  }
+  return true;
+}
